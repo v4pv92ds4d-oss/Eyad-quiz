@@ -193,6 +193,26 @@ input,select{background:var(--ink);border:1px solid var(--line);border-radius:10
 .p-buzz:active:not([disabled]){transform:translateY(4px);box-shadow:0 4px 0 rgba(0,0,0,.35)}
 .p-buzz[disabled]{opacity:.45;cursor:default}
 .player .opt{cursor:default}
+.screen{max-width:none;padding-inline:32px}
+.screen .scores{grid-template-columns:repeat(4,1fr)}
+.screen .scores .sc{font-size:48px}
+.screen .q-text{font-size:clamp(30px,3.6vw,52px)}
+.screen .chips .chip{font-size:20px;padding:6px 14px}
+.screen .p-time{font-size:32px!important;color:var(--gold);border-color:var(--gold)}
+.screen .opts.col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.screen .opt .tx{font-size:clamp(22px,2.4vw,34px)}
+.screen .status{font-size:30px;text-align:center}
+.screen .reveal .ans{font-size:36px}
+.screen .reveal-wrap.img img{max-height:58vh}
+.screen .pic .reveal-wrap:not(.img){width:min(100%,640px)}
+.screen .top h1{font-size:44px}
+.screen .top p{font-size:18px}
+.screen .team .nm{font-size:26px}
+.screen .turn-banner{font-size:30px}
+.screen .pod{font-size:32px;padding:14px 20px}
+.screen .card h2{font-size:28px}
+.screen .mem-grid div{font-size:64px}
+.s-join{text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px}
 </style>
 
 <div class="wrap">
@@ -545,7 +565,7 @@ document.addEventListener("keydown",e=>{
 const LIVE_TOPIC="eyad-khatma-quiz-1448-r8m2xq",LIVE_BASE="https://ntfy.sh/"+LIVE_TOPIC,HOST_KEY="eyad1448";
 const QSP=new URLSearchParams(location.search);
 const ONLINE=/^https?:/.test(location.protocol);
-const MODE=QSP.get("host")===HOST_KEY?"host":(ONLINE&&!QSP.has("board")?"player":"board");
+const MODE=QSP.get("host")===HOST_KEY?"host":!ONLINE||QSP.has("board")?"board":QSP.has("screen")?"screen":"player";
 const rid=()=>Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-4);
 const liveSeen={};let liveConnected=false,liveOnMsg=()=>{};
 function liveHandle(m){if(!m||m.event!=="message"||liveSeen[m.id])return;liveSeen[m.id]=1;let d;try{d=JSON.parse(m.message)}catch(e){return}if(d&&d.t)liveOnMsg(d);}
@@ -567,7 +587,7 @@ if(MODE==="host"){
   const playerURL=location.origin+location.pathname;
   const bar=document.createElement("section");bar.className="live-bar";
   bar.innerHTML=`<div><b>البث المباشر</b> <span id="liveDot" class="live-dot"></span> <span id="liveTxt">يتصل…</span></div>
-   <div class="live-link">رابط المتسابقين: <b dir="ltr">${esc(playerURL)}</b> <button class="btn ghost" id="liveQRb" type="button">رمز QR</button></div>
+   <div class="live-link">رابط المتسابقين: <b dir="ltr">${esc(playerURL)}</b> · شاشة العرض: <b dir="ltr">${esc(playerURL)}?screen</b> <button class="btn ghost" id="liveQRb" type="button">رمز QR</button></div>
    <div id="livePress" class="live-press"></div><div id="liveQR" class="live-qr" hidden></div>`;
   $("scores").after(bar);
   liveStatus=()=>{$("liveDot").classList.toggle("on",liveConnected);$("liveTxt").textContent=liveConnected?"متصل":"غير متصل، يعيد المحاولة…";};
@@ -585,7 +605,7 @@ if(MODE==="host"){
     if(open)buzz(t);else{pressLine();liveSync();}
   };
   let lastSig="",timer=null;
-  const snap=()=>{const base={t:"state",g:S.gid,phase:S.phase,n:S.teamCount,names:teams().map(t=>t.name),scores:S.scores.slice(0,S.teamCount),cur:S.cur,tw:S.tieWin??null};
+  const snap=()=>{const base={t:"state",g:S.gid,phase:S.phase,n:S.teamCount,names:teams().map(t=>t.name),scores:S.scores.slice(0,S.teamCount),cur:S.cur,tw:S.tieWin??null,ti:S.tieI||0,ts:!!S.tieShow};
     if(S.phase!=="play"||!QS)return base;const s=QS;
     return Object.assign(base,{buzzed:s.buzzed,out:[...s.out],wrong:[...s.wrong],gone:[...s.gone],steal:!!s.steal,done:!!s.done,winner:s.winner,lp:s.lastPts||0,
       running:!!s.running,left:s.left,rev:s.rev||0,perm:s.perm||null,mem:s.memPhase,memLeft:s.memLeft,pr:s.presses||[]});};
@@ -599,9 +619,10 @@ if(MODE==="host"){
 }
 
 /* ---------- PLAYER (contestant phone) ---------- */
-if(MODE==="player"){
+if(MODE==="player"||MODE==="screen"){
+  const SCR=MODE==="screen";
   document.querySelector(".wrap").hidden=true;
-  const root=document.createElement("div");root.className="wrap player";document.body.appendChild(root);
+  const root=document.createElement("div");root.className="wrap player"+(SCR?" screen":"");document.body.appendChild(root);
   let P=null,recvAt=0,myTeam=null,pressedQ=null,tick=null;
   const myKey=g=>"khatma-team-"+g;
   const ldTeam=g=>{try{const v=localStorage.getItem(myKey(g));return v===null?null:+v}catch(e){return null}};
@@ -614,16 +635,17 @@ if(MODE==="player"){
   const elapsed=()=>P&&P.running?Math.floor((Date.now()-recvAt)/1000):0;
   function draw(){
     clearInterval(tick);
-    const head=`<header class="top"><div class="brand"><h1>مسابقة ليلة الختمة</h1><p>شاشة المتسابقين <span id="pDot" class="live-dot${liveConnected?" on":""}"></span></p></div>
-      ${P&&myTeam!==null&&P.names[myTeam]!==undefined?`<button class="btn ghost" id="pChange" type="button">تغيير الفريق</button>`:""}</header>`;
+    const head=`<header class="top"><div class="brand"><h1>مسابقة ليلة الختمة</h1><p>${SCR?"احتفاءً بختم إياد حفظ كتاب الله":"شاشة المتسابقين"} <span id="pDot" class="live-dot${liveConnected?" on":""}"></span></p></div>
+      ${!SCR&&P&&myTeam!==null&&P.names[myTeam]!==undefined?`<button class="btn ghost" id="pChange" type="button">تغيير الفريق</button>`:""}</header>`;
     if(!P){root.innerHTML=head+`<div class="card"><p class="q-text" style="font-size:22px">بانتظار المنظم… ستظهر المسابقة هنا حين يفتحها.</p></div>`;return;}
     const names=P.names,cols=TEAM_COLORS;
     const scores=`<section class="scores">${names.map((nm,i)=>`<div class="team${i===myTeam?" buzzed":""}" style="--tc:${cols[i]}"><div class="nm">${esc(nm)}${i===myTeam?" (فريقك)":""}</div><div class="sc">${P.scores[i]}</div></div>`).join("")}</section>`;
-    if(myTeam===null||myTeam>=P.n){root.innerHTML=head+`<div class="card"><h2>اختر فريقك</h2><div class="p-teams">${names.map((nm,i)=>`<button class="btn p-team" type="button" data-t="${i}" style="--tc:${cols[i]}">${esc(nm)}</button>`).join("")}</div></div>`;
+    if(!SCR&&(myTeam===null||myTeam>=P.n)){root.innerHTML=head+`<div class="card"><h2>اختر فريقك</h2><div class="p-teams">${names.map((nm,i)=>`<button class="btn p-team" type="button" data-t="${i}" style="--tc:${cols[i]}">${esc(nm)}</button>`).join("")}</div></div>`;
       root.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>pick(+b.dataset.t));return;}
-    if(P.phase==="setup"){root.innerHTML=head+scores+`<div class="card"><p class="q-text" style="font-size:22px">أنت في <b>${esc(names[myTeam])}</b>. بانتظار بدء المسابقة…</p></div>`;bind();return;}
+    if(P.phase==="setup"){root.innerHTML=head+scores+(SCR?`<div class="card s-join"><p class="q-text">امسحوا الرمز بالجوال واختاروا فريقكم</p><div id="sQR" class="live-qr"></div><p class="hint" dir="ltr">${esc(location.origin+location.pathname)}</p></div>`
+      :`<div class="card"><p class="q-text" style="font-size:22px">أنت في <b>${esc(names[myTeam])}</b>. بانتظار بدء المسابقة…</p></div>`);bind();if(SCR)drawQR();return;}
     if(P.phase==="results"){const order=names.map((nm,i)=>i).sort((a,b)=>(P.scores[b]-P.scores[a])||((b===P.tw)-(a===P.tw)));
-      root.innerHTML=head+`<div class="card"><h2>النتائج النهائية</h2><div class="podium">${order.map((i,k)=>`<div class="pod${k===0?" first":""}" style="--tc:${cols[i]}"><span>${k+1}. ${esc(names[i])}</span><span class="pts">${P.scores[i]}</span></div>`).join("")}</div></div>`;bind();return;}
+      root.innerHTML=head+`<div class="card"><h2>النتائج النهائية</h2><div class="podium">${order.map((i,k)=>`<div class="pod${k===0?" first":""}" style="--tc:${cols[i]}"><span>${k+1}. ${esc(names[i])}${i===P.tw?" · فاز بسؤال الحسم":""}</span><span class="pts">${P.scores[i]}</span></div>`).join("")}</div></div>`+tieCard();bind();return;}
     const st=STEPS[P.cur];if(!st){root.innerHTML=head+scores;bind();return;}
     const it=st.q,owner=st.kind==="priv"?st.team:null;
     const left=Math.max(0,P.left-elapsed());
@@ -641,7 +663,7 @@ if(MODE==="player"){
       body=`<div class="pic${it.type==="flag"?" flag":""}" style="justify-content:center;display:flex"><div class="reveal-wrap${it.img?" img":""}">${media}<div class="cover" style="grid-template-columns:repeat(${g[0]},1fr);grid-template-rows:repeat(${g[1]},1fr)">${Array.from({length:TILES},(_,k)=>`<i class="${P.done||off.has(k)?"off":""}">؟</i>`).join("")}</div></div></div>`+(it.o?`<div class="opts col">${it.o.map(optRow).join("")}</div>`:"");}
     const buzzOpen=!P.done&&P.buzzed===null&&!P.out.includes(myTeam)&&(st.kind==="speed"||P.steal)&&!memShow;
     const pressed=pressedQ===P.cur;
-    const bz=st.kind==="speed"||P.steal?`<button class="p-buzz" id="pBuzz" type="button" ${buzzOpen&&!pressed?"":"disabled"} style="--tc:${cols[myTeam]}">${pressed&&P.buzzed===null?"ضغطتم… بانتظار المنظم":P.buzzed===myTeam?"أنتم الأسرع! أجيبوا":P.out.includes(myTeam)?"خرجتم من هذا السؤال":"اضغط الجرس"}</button>`:"";
+    const bz=!SCR&&(st.kind==="speed"||P.steal)?`<button class="p-buzz" id="pBuzz" type="button" ${buzzOpen&&!pressed?"":"disabled"} style="--tc:${cols[myTeam]}">${pressed&&P.buzzed===null?"ضغطتم… بانتظار المنظم":P.buzzed===myTeam?"أنتم الأسرع! أجيبوا":P.out.includes(myTeam)?"خرجتم من هذا السؤال":"اضغط الجرس"}</button>`:"";
     let status="";
     if(P.done)status=P.winner!==null&&P.winner>=0?`أحسن <b>${esc(names[P.winner])}</b> +${P.lp}`:"انتهى السؤال دون نقاط.";
     else if(P.buzzed!==null)status=st.kind==="priv"&&!P.steal?`يجيب <b>${esc(names[P.buzzed])}</b>`:`ضغط أولًا: <b>${esc(names[P.buzzed])}</b>`;
@@ -658,6 +680,12 @@ if(MODE==="player"){
       if(isP&&P.buzzed===null){const r=Math.min(TILES,P.rev+elapsed()),off=new Set((P.perm||[]).slice(0,r));root.querySelectorAll(".cover i").forEach((el,k)=>el.classList.toggle("off",off.has(k)));}
       if(l<=0)clearInterval(tick);},1000);
   }
+  function tieCard(){const top=Math.max(...P.scores),tied=P.scores.map((s,i)=>s===top?i:-1).filter(i=>i>=0);
+    if(tied.length<2||(P.tw!==null&&P.tw!==undefined))return "";const q=TIEQ[Math.min(P.ti||0,TIEQ.length-1)];
+    return `<div class="card"><h2>سؤال الحسم بين ${tied.map(i=>esc(P.names[i])).join(" و")}</h2><p class="q-text">${q.q}</p>${P.ts?`<div class="reveal"><div class="ans">الإجابة: ${q.a}</div></div>`:""}</div>`;}
+  function drawQR(){const q=document.getElementById("sQR");if(!q)return;const url=location.origin+location.pathname;
+    const go=()=>{q.innerHTML="";new QRCode(q,{text:url,width:260,height:260});};
+    if(window.QRCode)return go();const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";s.onload=go;s.onerror=()=>{q.hidden=true};document.head.appendChild(s);}
   function bind(){const c=document.getElementById("pChange");if(c)c.onclick=()=>{myTeam=null;try{localStorage.removeItem(myKey(P.g))}catch(e){}draw();};}
   draw();liveConnect();
 }

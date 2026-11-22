@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>بازل إياد</title>
+<meta name="description" content="لعبة تركيب صورة الحافظ إياد: أول من يُكملها ويضغط «تم» هو الفائز">
+<meta property="og:title" content="بازل إياد 🧩">
+<meta property="og:description" content="ركّب صورة الحافظ إياد، وأول من ينهيها يفوز">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@700&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f2a24; --bg2:#14382f; --card:#183f35; --ink:#fbf6ea; --muted:#c9bfa6;
+  --gold:#d8b25a; --gold2:#f1d48c; --ok:#4fc38a; --bad:#e46a5a; --line:rgba(216,178,90,.35);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{background:radial-gradient(1200px 700px at 50% -10%,#1d4a3e 0%,var(--bg) 60%) fixed,var(--bg);
+  color:var(--ink);font-family:Tajawal,system-ui,sans-serif;min-height:100vh;min-height:100dvh}
+.wrap{max-width:560px;margin:0 auto;padding:14px 16px 40px}
+header{text-align:center;padding:6px 0 4px}
+.title{font-family:"Aref Ruqaa",serif;color:var(--gold2);font-size:34px;line-height:1.3;margin:0}
+.sub{color:var(--muted);font-size:15px;margin:2px 0 0}
+.card{background:linear-gradient(180deg,var(--card),var(--bg2));border:1px solid var(--line);border-radius:18px;padding:18px;margin-top:14px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+h2{margin:0 0 10px;font-size:20px;color:var(--gold2)}
+p{line-height:1.7}
+input[type=text]{width:100%;font:inherit;font-size:20px;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#0d231e;color:var(--ink);outline:none;text-align:center}
+input[type=text]:focus{border-color:var(--gold)}
+button{font:inherit;cursor:pointer;border:0;border-radius:14px;padding:13px 18px;font-size:19px;font-weight:800}
+.btn{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#2b2007;width:100%;margin-top:12px}
+.btn:disabled{background:#3a4a44;color:#8a958f;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--gold2);border:1px solid var(--line);font-weight:700;font-size:16px}
+.btn.done{background:linear-gradient(180deg,#6be0a3,var(--ok));color:#06301c;font-size:24px;animation:pulse 1.1s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.pill{display:inline-flex;align-items:center;gap:6px;background:#0d231e;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:15px;color:var(--muted)}
+.pill b{color:var(--ink);font-variant-numeric:tabular-nums}
+.hidden{display:none!important}
+.center{text-align:center}
+.muted{color:var(--muted)}
+.spinner{width:42px;height:42px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--gold);animation:spin 1s linear infinite;margin:14px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* board */
+.boardWrap{position:relative;margin:12px auto 0;width:100%;max-width:520px}
+.board{direction:ltr;display:grid;gap:2px;background:#0a1c18;border:2px solid var(--gold);border-radius:12px;padding:2px;touch-action:manipulation;user-select:none;-webkit-user-select:none;aspect-ratio:4/5}
+.tile{background-image:url(eyad.jpg);background-repeat:no-repeat;border-radius:3px;transition:transform .12s, box-shadow .12s, outline-color .12s;outline:3px solid transparent;outline-offset:-3px}
+.tile.sel{outline-color:var(--gold2);transform:scale(.93);box-shadow:0 0 0 3px rgba(241,212,140,.4)}
+.board.solved{gap:0;padding:0;border-color:var(--ok)}
+.board.solved .tile{border-radius:0}
+.ref{position:absolute;inset:0;background:url(eyad.jpg) center/cover;border-radius:12px;border:2px solid var(--gold);opacity:0;pointer-events:none;transition:opacity .15s}
+.ref.show{opacity:1}
+
+/* results */
+.winner{border:2px solid var(--gold);background:linear-gradient(180deg,#2c4f34,#1a3a2d);text-align:center}
+.winner .crown{font-size:46px;line-height:1}
+.winner .name{font-size:32px;font-weight:800;color:var(--gold2);margin:4px 0;word-break:break-word}
+ol.rank{margin:8px 0 0;padding:0 22px 0 0}
+ol.rank li{padding:7px 0;border-bottom:1px dashed var(--line);font-size:18px}
+ol.rank li:last-child{border-bottom:0}
+ol.rank li .t{color:var(--muted);font-size:14px;margin-inline-start:6px}
+ol.rank li.me{color:var(--gold2);font-weight:800}
+
+/* host */
+.host .wrap{max-width:1100px}
+.hostGrid{display:grid;grid-template-columns:1fr;gap:14px}
+@media (min-width:900px){.hostGrid{grid-template-columns:1.2fr 1fr}}
+.bigWinner{font-size:clamp(34px,7vw,84px);font-weight:800;color:var(--gold2);text-align:center;margin:6px 0;word-break:break-word}
+.qr{background:#fff;padding:12px;border-radius:14px;display:inline-block}
+.qr img,.qr canvas{display:block}
+.link{direction:ltr;font-size:15px;word-break:break-all;color:var(--gold2)}
+select{font:inherit;font-size:17px;padding:10px;border-radius:12px;background:#0d231e;color:var(--ink);border:1px solid var(--line)}
+.stat{font-size:44px;font-weight:800;color:var(--gold2);font-variant-numeric:tabular-nums}
+.toast{position:fixed;inset-inline:16px;top:14px;pointer-events:none;margin:auto;max-width:520px;background:#3b1d19;border:1px solid var(--bad);color:#ffd9d2;padding:12px 14px;border-radius:12px;text-align:center;z-index:50}
+canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:40}
+</style>
+</head>
+<body>
+<canvas id="confetti"></canvas>
+<div class="wrap">
+  <header>
+    <h1 class="title">بازل الحافظ إياد</h1>
+    <p class="sub" id="subTitle">ركّب الصورة، وأول من يُنهيها ويضغط «تم» هو الفائز</p>
+  </header>
+
+  <!-- ============ GUEST ============ -->
+  <section id="guest">
+    <div class="card" id="scrName">
+      <h2>أهلًا بك 🌿</h2>
+      <p class="muted" style="margin-top:0">اكتب اسمك ليظهر للجميع إن فزت</p>
+      <input type="text" id="nameIn" maxlength="30" placeholder="اسمك" autocomplete="name">
+      <button class="btn" id="nameBtn">دخول</button>
+    </div>
+
+    <div class="card center hidden" id="scrWait">
+      <h2>مرحبًا <span id="hello"></span></h2>
+      <div class="spinner"></div>
+      <p style="margin:0">بانتظار إشارة البدء من المضيف…</p>
+      <p class="muted" style="font-size:14px;margin:6px 0 0">ستبدأ اللعبة تلقائيًا عند الإشارة، أبقِ الصفحة مفتوحة.</p>
+    </div>
+
+    <div class="hidden" id="scrPlay">
+      <div class="row" style="margin-top:12px">
+        <span class="pill">⏱ <b id="timer">0:00</b></span>
+        <span class="pill">الحركات <b id="moves">0</b></span>
+        <button class="pill" id="peekBtn" style="cursor:pointer">👁 الصورة</button>
+      </div>
+      <p class="muted center" style="margin:8px 0 0;font-size:14px">اضغط قطعتين لتبديل مكانهما. اضغط مطوّلًا على «الصورة» لرؤية الأصل.</p>
+      <div class="boardWrap">
+        <div class="board" id="board"></div>
+        <div class="ref" id="ref"></div>
+      </div>
+      <button class="btn" id="doneBtn" disabled>أكمل الصورة ثم اضغط «تم»</button>
+    </div>
+
+    <div class="hidden" id="scrResult">
+      <div class="card winner hidden" id="winCard">
+        <div class="crown">🏆</div>
+        <div class="muted">الفائز</div>
+        <div class="name" id="winName"></div>
+        <div class="muted" id="winMeta"></div>
+      </div>
+      <div class="card center hidden" id="myCard"></div>
+      <div class="card">
+        <h2>ترتيب من أنهوا</h2>
+        <ol class="rank" id="rank"></ol>
+        <p class="muted hidden" id="rankEmpty" style="margin:0">لم يُنهِ أحد بعد.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HOST ============ -->
+  <section id="host" class="hidden">
+    <div class="hostGrid">
+      <div>
+        <div class="card center" id="hWinCard">
+          <div class="muted" id="hState">لم تبدأ الجولة بعد</div>
+          <div class="crown hidden" id="hCrown" style="font-size:64px">🏆</div>
+          <div class="bigWinner" id="hWinner">—</div>
+          <div class="muted" id="hWinMeta"></div>
+        </div>
+        <div class="card">
+          <div class="row">
+            <h2 style="margin:0">ترتيب المنهين</h2>
+            <span class="pill">انضم <b id="hJoined">0</b></span>
+          </div>
+          <ol class="rank" id="hRank"></ol>
+          <p class="muted" id="hRankEmpty" style="margin:6px 0 0">لا أحد بعد.</p>
+        </div>
+      </div>
+      <div>
+        <div class="card center">
+          <h2>امسح للمشاركة</h2>
+          <div class="qr" id="qr"></div>
+          <p class="link" id="guestLink"></p>
+        </div>
+        <div class="card">
+          <h2>تحكم المضيف</h2>
+          <label class="muted">مستوى الصعوبة</label>
+          <select id="lvl" style="width:100%;margin-top:6px">
+            <option value="3x4">سهل — 12 قطعة</option>
+            <option value="4x5" selected>متوسط — 20 قطعة</option>
+            <option value="5x6">صعب — 30 قطعة</option>
+          </select>
+          <button class="btn" id="startBtn">▶ ابدأ جولة جديدة</button>
+          <p class="muted" style="font-size:14px;margin:10px 0 0">يبدأ الجميع في اللحظة نفسها وبالترتيب المخلوط نفسه. بدء جولة جديدة يلغي نتائج الجولة السابقة من الشاشة.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<div class="toast hidden" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function(){
+"use strict";
+/* ---------- config ---------- */
+var TOPIC = "eyad-hafiz-puzzle-1448-k7q3vz9m";       // ntfy.sh public topic (no account needed)
+var BASE  = "https://ntfy.sh/" + TOPIC;
+var HOST_KEY = "eyad1448";
+
+var qs = new URLSearchParams(location.search);
+var isHost = qs.get("host") === HOST_KEY;
+
+/* ---------- small helpers ---------- */
+function $(id){return document.getElementById(id);}
+function show(el,on){el.classList.toggle("hidden",!on);}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function ls(k,v){try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v);}catch(e){return null;}}
+function fmt(ms){ms=Math.max(0,ms|0);var s=Math.floor(ms/1000),m=Math.floor(s/60);s=s%60;return m+":"+(s<10?"0":"")+s;}
+function fmtLong(ms){var s=(ms/1000);return s<60? s.toFixed(1)+" ث" : fmt(ms)+" د";}
+var toastT;
+function toast(msg){var t=$("toast");t.textContent=msg;show(t,true);clearTimeout(toastT);toastT=setTimeout(function(){show(t,false);},5000);}
+function rid(){return Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);}
+
+var cid = ls("eyadPuzzleCid"); if(!cid){cid=rid();ls("eyadPuzzleCid",cid);}
+
+/* ---------- shared state from the message stream ---------- */
+var seen = {};           // ntfy message ids
+var round = null;        // {id, seed, cols, rows, time}
+var finishers = [];      // ordered list for current round {cid,name,ms,moves,time}
+var joined = {};         // cid -> name, current round
+var onChange = function(){};
+
+function handle(m){
+  if(!m || m.event!=="message" || seen[m.id]) return;
+  seen[m.id]=1;
+  var d; try{ d=JSON.parse(m.message); }catch(e){ return; }
+  if(!d || !d.t) return;
+  if(d.t==="start"){
+    if(round && round.id===d.round) return;
+    round={id:d.round, seed:d.seed>>>0, cols:d.cols|0, rows:d.rows|0, time:m.time};
+    finishers=[]; joined={};
+  } else if(d.t==="done"){
+    if(!round || d.round!==round.id) return;
+    for(var i=0;i<finishers.length;i++) if(finishers[i].cid===d.cid) return;
+    finishers.push({cid:d.cid, name:String(d.name||"").slice(0,30), ms:+d.ms||0, moves:+d.moves||0, time:m.time});
+  } else if(d.t==="join"){
+    if(round && d.round===round.id) joined[d.cid]=d.name;
+  } else return;
+  onChange(d.t);
+}
+
+function publish(obj){
+  return fetch(BASE,{method:"POST",body:JSON.stringify(obj)}).then(function(r){
+    if(!r.ok) throw new Error("HTTP "+r.status); return r;
+  });
+}
+function publishRetry(obj,tries){
+  tries=tries||0;
+  return publish(obj).catch(function(e){
+    if(tries<4){ return new Promise(function(res){setTimeout(res,1200*(tries+1));}).then(function(){return publishRetry(obj,tries+1);}); }
+    throw e;
+  });
+}
+
+var es=null, connected=false;
+function connect(){
+  // one SSE connection: replays the cached history (since=all) then streams live
+  try{ es = new EventSource(BASE+"/sse?since=all"); }catch(e){ pollOnce(); return; }
+  es.onmessage=function(ev){ try{ handle(JSON.parse(ev.data)); }catch(e){} };
+  es.addEventListener("open",function(){ connected=true; });
+  es.onerror=function(){ connected=false; /* EventSource reconnects by itself; duplicates are ignored */ };
+}
+function pollOnce(){
+  return fetch(BASE+"/json?poll=1&since=all").then(function(r){return r.text();}).then(function(t){
+    t.split("\n").forEach(function(line){ if(line.trim()){ try{handle(JSON.parse(line));}catch(e){} } });
+  }).catch(function(){});
+}
+// safety net: if the live stream is down, poll occasionally (gentle, to respect rate limits)
+setInterval(function(){ if(!connected) pollOnce(); }, 15000);
+
+/* ---------- seeded shuffle ---------- */
+function rng(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0; var t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function shuffled(n,seed){
+  var a=[],i,r=rng(seed);
+  for(i=0;i<n;i++)a.push(i);
+  var tries=0;
+  do{ for(i=n-1;i>0;i--){var j=Math.floor(r()*(i+1));var x=a[i];a[i]=a[j];a[j]=x;} }
+  while(countFixed(a)>Math.floor(n/6) && ++tries<50);
+  return a;
+}
+function countFixed(a){var c=0;for(var i=0;i<a.length;i++)if(a[i]===i)c++;return c;}
+
+/* ---------- confetti ---------- */
+function confetti(){
+  var c=$("confetti"),x=c.getContext("2d"),W=c.width=innerWidth,H=c.height=innerHeight,P=[],cols=["#f1d48c","#d8b25a","#4fc38a","#fbf6ea","#e46a5a"];
+  for(var i=0;i<160;i++)P.push({x:Math.random()*W,y:-20-Math.random()*H*.5,vx:(Math.random()-.5)*3,vy:2+Math.random()*4,s:5+Math.random()*7,r:Math.random()*6,c:cols[i%cols.length]});
+  var t0=performance.now();
+  (function f(t){x.clearRect(0,0,W,H);P.forEach(function(p){p.x+=p.vx;p.y+=p.vy;p.r+=.1;x.save();x.translate(p.x,p.y);x.rotate(p.r);x.fillStyle=p.c;x.fillRect(-p.s/2,-p.s/4,p.s,p.s/2);x.restore();});
+    if(t-t0<4500)requestAnimationFrame(f);else x.clearRect(0,0,W,H);})(t0);
+}
+
+function rankHTML(list,meCid){
+  return list.map(function(f){
+    return '<li class="'+(f.cid===meCid?"me":"")+'">'+esc(f.name)+'<span class="t">'+fmtLong(f.ms)+' · '+f.moves+' حركة</span></li>';
+  }).join("");
+}
+
+/* ================= HOST ================= */
+if(isHost){
+  document.body.classList.add("host");
+  show($("guest"),false); show($("host"),true);
+  $("subTitle").textContent="شاشة المضيف — اعرضها للحضور";
+  var guestUrl = location.origin + location.pathname;
+  $("guestLink").textContent=guestUrl;
+  try{ new QRCode($("qr"),{text:guestUrl,width:220,height:220,correctLevel:QRCode.CorrectLevel.M}); }catch(e){ $("qr").textContent=guestUrl; }
+
+  var lastWinner=null;
+  onChange=function(){
+    $("hJoined").textContent=Object.keys(joined).length;
+    if(!round){ $("hState").textContent="لم تبدأ الجولة بعد"; return; }
+    var w=finishers[0];
+    $("hState").textContent = w ? "🎉 الفائز بالجولة" : "الجولة جارية… ("+round.cols*round.rows+" قطعة)";
+    $("hWinner").textContent = w ? w.name : "بانتظار أول من يُنهي";
+    $("hWinner").style.fontSize = w ? "" : "clamp(22px,4vw,40px)";
+    show($("hCrown"),!!w);
+    $("hWinMeta").textContent = w ? ("الوقت "+fmtLong(w.ms)+" · "+w.moves+" حركة") : "";
+    $("hRank").innerHTML=rankHTML(finishers,null);
+    show($("hRankEmpty"),!finishers.length);
+    if(w && lastWinner!==round.id+w.cid){ lastWinner=round.id+w.cid; confetti(); }
+  };
+  $("startBtn").onclick=function(){
+    var lv=$("lvl").value.split("x");
+    if(round && !finishers.length && !confirm("الجولة الحالية لم تنتهِ بعد. هل تريد بدء جولة جديدة؟")) return;
+    var b=this; b.disabled=true; b.textContent="جارٍ الإرسال…";
+    publishRetry({t:"start",round:rid(),seed:(Math.random()*4294967295)>>>0,cols:+lv[0],rows:+lv[1]})
+      .then(function(){ b.textContent="✓ بدأت الجولة"; setTimeout(function(){b.disabled=false;b.textContent="▶ ابدأ جولة جديدة";},2500); })
+      .catch(function(){ b.disabled=false; b.textContent="▶ ابدأ جولة جديدة"; toast("تعذّر الإرسال. تحقق من الإنترنت وحاول مجددًا."); });
+  };
+  connect();
+  return;
+}
+
+/* ================= GUEST ================= */
+var myName = ls("eyadPuzzleName")||"";
+var state = "name";   // name | wait | play | result
+var playRound=null, order=[], sel=-1, moves=0, t0=0, tick=null, sentDone={}, joinedRound={};
+
+function go(s){ state=s;
+  show($("scrName"),s==="name"); show($("scrWait"),s==="wait");
+  show($("scrPlay"),s==="play"); show($("scrResult"),s==="result");
+}
+
+$("nameIn").value=myName;
+$("nameBtn").onclick=function(){
+  var v=$("nameIn").value.trim().replace(/\s+/g," ");
+  if(v.length<2){ toast("اكتب اسمك (حرفان على الأقل)"); return; }
+  myName=v; ls("eyadPuzzleName",v); $("hello").textContent=v;
+  connect(); sync();
+};
+$("nameIn").addEventListener("keydown",function(e){ if(e.key==="Enter") $("nameBtn").click(); });
+
+function sync(){
+  if(!myName) { go("name"); return; }
+  if(!round){ go("wait"); return; }
+  if(!joinedRound[round.id]){ joinedRound[round.id]=1; publish({t:"join",round:round.id,cid:cid,name:myName}).catch(function(){}); }
+  if(playRound!==round.id){
+    // new round arrived
+    var done = finishers.some(function(f){return f.cid===cid;});
+    if(done){ playRound=round.id; showResult(); return; }
+    startPlay();
+    return;
+  }
+  if(state==="result") showResult();
+  else if(state==="play") renderWinnerHint();
+}
+
+function startPlay(){
+  playRound=round.id;
+  var n=round.cols*round.rows;
+  order=shuffled(n,round.seed); sel=-1; moves=0;
+  t0=Date.now();
+  var key="eyadPuzzleT0_"+round.id, saved=+ls(key);
+  if(saved) t0=saved; else ls(key,String(t0));
+  buildBoard(); $("moves").textContent="0"; updateDone();
+  clearInterval(tick); tick=setInterval(function(){ $("timer").textContent=fmt(Date.now()-t0); },250);
+  go("play");
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function buildBoard(){
+  var b=$("board"), C=round.cols, R=round.rows;
+  b.classList.remove("solved");
+  b.style.gridTemplateColumns="repeat("+C+",1fr)";
+  b.style.gridTemplateRows="repeat("+R+",1fr)";
+  b.innerHTML="";
+  for(var i=0;i<order.length;i++){
+    var d=document.createElement("div"); d.className="tile"; d.dataset.pos=i;
+    b.appendChild(d);
+  }
+  paint();
+}
+function paint(){
+  var C=round.cols, R=round.rows, tiles=$("board").children;
+  for(var i=0;i<tiles.length;i++){
+    var p=order[i], cx=p%C, cy=Math.floor(p/C);
+    tiles[i].style.backgroundSize=(C*100)+"% "+(R*100)+"%";
+    tiles[i].style.backgroundPosition=(C>1?cx*100/(C-1):0)+"% "+(R>1?cy*100/(R-1):0)+"%";
+    tiles[i].classList.toggle("sel",i===sel);
+  }
+}
+function solved(){ for(var i=0;i<order.length;i++) if(order[i]!==i) return false; return true; }
+function updateDone(){
+  var ok=solved(), btn=$("doneBtn");
+  btn.disabled=!ok;
+  btn.classList.toggle("done",ok);
+  btn.textContent= ok ? "✓ تم" : "أكمل الصورة ثم اضغط «تم»";
+  $("board").classList.toggle("solved",ok);
+}
+$("board").addEventListener("click",function(e){
+  var t=e.target.closest(".tile"); if(!t||solved()) return;
+  var i=+t.dataset.pos;
+  if(sel<0){ sel=i; }
+  else if(sel===i){ sel=-1; }
+  else { var x=order[sel]; order[sel]=order[i]; order[i]=x; sel=-1; moves++; $("moves").textContent=moves;
+    if(navigator.vibrate) try{navigator.vibrate(8);}catch(_){}
+  }
+  paint(); updateDone();
+});
+// peek at the original
+(function(){
+  var r=$("ref"), b=$("peekBtn");
+  function on(e){ e.preventDefault(); r.classList.add("show"); }
+  function off(){ r.classList.remove("show"); }
+  b.addEventListener("pointerdown",on); b.addEventListener("pointerup",off); b.addEventListener("pointerleave",off); b.addEventListener("pointercancel",off);
+  b.addEventListener("contextmenu",function(e){e.preventDefault();});
+})();
+
+$("doneBtn").onclick=function(){
+  if(!solved()||!round) return;
+  var b=this, ms=Date.now()-t0, rd=round.id;
+  clearInterval(tick); $("timer").textContent=fmt(ms);
+  b.disabled=true; b.classList.remove("done"); b.textContent="جارٍ الإرسال…";
+  sentDone[rd]={ms:ms,moves:moves};
+  publishRetry({t:"done",round:rd,cid:cid,name:myName,ms:ms,moves:moves})
+    .then(function(){ showResult(); })
+    .catch(function(){ b.disabled=false; b.classList.add("done"); b.textContent="✓ تم (أعد المحاولة)"; toast("تعذّر الإرسال. تحقق من الإنترنت واضغط «تم» مرة أخرى."); });
+};
+
+function renderWinnerHint(){
+  var w=finishers[0];
+  if(w && w.cid!==cid && renderWinnerHint.shown!==round.id){ renderWinnerHint.shown=round.id; toast("🏆 فاز "+w.name+"! يمكنك إكمال الصورة."); }
+}
+
+var celebrated={};
+function showResult(){
+  go("result"); clearInterval(tick);
+  var w=finishers[0];
+  show($("winCard"),!!w);
+  if(w){ $("winName").textContent=w.name; $("winMeta").textContent="الوقت "+fmtLong(w.ms)+" · "+w.moves+" حركة"; }
+  var myIdx=-1; finishers.forEach(function(f,i){ if(f.cid===cid) myIdx=i; });
+  var mc=$("myCard"); show(mc,true);
+  if(myIdx===0){ mc.innerHTML='<h2 style="margin:0">🎉 مبروك! أنت الفائز</h2><p class="muted" style="margin:6px 0 0">اسمك ظاهر الآن للجميع</p>';
+    if(!celebrated[round.id]){celebrated[round.id]=1;confetti();} }
+  else if(myIdx>0){ mc.innerHTML='<h2 style="margin:0">أحسنت! ترتيبك '+(myIdx+1)+'</h2><p class="muted" style="margin:6px 0 0">بارك الله فيك، وبارك الله في إياد وحفظه</p>'; }
+  else { mc.innerHTML='<div class="spinner" style="width:28px;height:28px;margin:4px auto"></div><p class="muted" style="margin:0">تم الإرسال، بانتظار التأكيد…</p>'; }
+  $("rank").innerHTML=rankHTML(finishers,cid);
+  show($("rankEmpty"),!finishers.length);
+}
+
+onChange=function(){ if(myName) sync(); };
+
+if(myName){ $("hello").textContent=myName; connect(); go("wait"); }
+else go("name");
+})();
+</script>
+</body>
+</html>

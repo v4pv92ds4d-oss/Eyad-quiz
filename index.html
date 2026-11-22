@@ -177,6 +177,22 @@ input,select{background:var(--ink);border:1px solid var(--line);border-radius:10
 .reveal-wrap.img img{display:block;max-width:100%;max-height:62vh;width:auto;height:auto;border-radius:8px}
 .mem-photo{display:block;max-width:100%;max-height:60vh;border-radius:12px}
 .judge{display:flex;flex-direction:column;gap:12px}
+.live-bar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-block:10px}
+.live-link b{font-size:14px;word-break:break-all}
+.live-dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--bad);vertical-align:middle}
+.live-dot.on{background:var(--ok)}
+.live-press{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.live-press:empty{display:none}
+.live-qr{flex-basis:100%;display:flex;justify-content:center;background:#fff;padding:12px;border-radius:12px;max-width:260px;margin-inline:auto}
+.player .stage{display:flex;flex-direction:column;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
+.player .chips{display:flex;flex-wrap:wrap;gap:6px}
+.player .scores{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.p-teams{display:grid;gap:12px;margin-top:12px}
+.p-team{font-size:20px;padding:16px;border-inline-start:6px solid var(--tc)}
+.p-buzz{width:100%;min-height:110px;border-radius:20px;border:0;background:var(--tc);color:var(--ink);font-family:var(--f-display);font-size:28px;font-weight:700;box-shadow:0 8px 0 rgba(0,0,0,.35);cursor:pointer}
+.p-buzz:active:not([disabled]){transform:translateY(4px);box-shadow:0 4px 0 rgba(0,0,0,.35)}
+.p-buzz[disabled]{opacity:.45;cursor:default}
+.player .opt{cursor:default}
 </style>
 
 <div class="wrap">
@@ -346,7 +362,7 @@ function buildSteps(n){const st=[];CATS.forEach((c,ci)=>{
 const TEAM_COLORS=["var(--t1)","var(--t2)","var(--t3)","var(--t4)"];
 const DEFAULT_NAMES=["فريق الفرقان","فريق البيان","فريق التبيان","فريق الهدى"];
 const KEY="khatma-quiz-v8";const TIME=30;
-const fresh=()=>({phase:"setup",teamCount:4,names:DEFAULT_NAMES.slice(),scores:[0,0,0,0],lifeline:[true,true,true,true],cur:0,results:{},tieI:0,tieWin:null,tieShow:false});
+const fresh=()=>({phase:"setup",teamCount:4,names:DEFAULT_NAMES.slice(),scores:[0,0,0,0],lifeline:[true,true,true,true],cur:0,results:{},tieI:0,tieWin:null,tieShow:false,gid:Math.random().toString(36).slice(2,10)});
 let S=load()||fresh();let STEPS=buildSteps(S.teamCount);
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function load(){try{const s=JSON.parse(localStorage.getItem(KEY)||"null");return s&&s.names&&s.results?s:null}catch(e){return null}}
@@ -522,6 +538,129 @@ document.addEventListener("keydown",e=>{
   if(/^[1-4]$/.test(e.key)){buzz(+e.key-1);e.preventDefault();}
   else if(e.code==="Space"){toggleTimer();e.preventDefault();}
   else if(e.key==="ArrowLeft")go(S.cur+1);else if(e.key==="ArrowRight")go(S.cur-1);});
-route();
+/* ================= LIVE MODE: host board + contestants' phones =================
+   Sync goes through a public ntfy.sh topic (no account). The host publishes a small
+   "state" message only when something meaningful changes; phones publish one "buzz".
+   The first buzz that reaches the server arrives first in the host's stream and wins. */
+const LIVE_TOPIC="eyad-khatma-quiz-1448-r8m2xq",LIVE_BASE="https://ntfy.sh/"+LIVE_TOPIC,HOST_KEY="eyad1448";
+const QSP=new URLSearchParams(location.search);
+const ONLINE=/^https?:/.test(location.protocol);
+const MODE=QSP.get("host")===HOST_KEY?"host":(ONLINE&&!QSP.has("board")?"player":"board");
+const rid=()=>Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-4);
+const liveSeen={};let liveConnected=false,liveOnMsg=()=>{};
+function liveHandle(m){if(!m||m.event!=="message"||liveSeen[m.id])return;liveSeen[m.id]=1;let d;try{d=JSON.parse(m.message)}catch(e){return}if(d&&d.t)liveOnMsg(d);}
+function liveConnect(){
+  let es;try{es=new EventSource(LIVE_BASE+"/sse?since=all")}catch(e){return}
+  es.onmessage=ev=>{try{liveHandle(JSON.parse(ev.data))}catch(e){}};
+  es.addEventListener("open",()=>{liveConnected=true;liveStatus()});
+  es.onerror=()=>{liveConnected=false;liveStatus()};
+  setInterval(()=>{if(!liveConnected)fetch(LIVE_BASE+"/json?poll=1&since=all").then(r=>r.text()).then(t=>t.split("\n").forEach(l=>{if(l.trim())try{liveHandle(JSON.parse(l))}catch(e){}})).catch(()=>{})},15000);
+}
+function livePublish(obj,tries){tries=tries||0;
+  return fetch(LIVE_BASE,{method:"POST",body:JSON.stringify(obj)}).then(r=>{if(!r.ok)throw new Error(r.status);return r})
+   .catch(e=>{if(tries<3)return new Promise(res=>setTimeout(res,1500*(tries+1))).then(()=>livePublish(obj,tries+1));throw e;});}
+let liveStatus=()=>{};
+
+/* ---------- HOST ---------- */
+if(MODE==="host"){
+  if(!S.gid){S.gid=rid();save();}
+  const playerURL=location.origin+location.pathname;
+  const bar=document.createElement("section");bar.className="live-bar";
+  bar.innerHTML=`<div><b>البث المباشر</b> <span id="liveDot" class="live-dot"></span> <span id="liveTxt">يتصل…</span></div>
+   <div class="live-link">رابط المتسابقين: <b dir="ltr">${esc(playerURL)}</b> <button class="btn ghost" id="liveQRb" type="button">رمز QR</button></div>
+   <div id="livePress" class="live-press"></div><div id="liveQR" class="live-qr" hidden></div>`;
+  $("scores").after(bar);
+  liveStatus=()=>{$("liveDot").classList.toggle("on",liveConnected);$("liveTxt").textContent=liveConnected?"متصل":"غير متصل، يعيد المحاولة…";};
+  $("liveQRb").onclick=()=>{const q=$("liveQR");q.hidden=!q.hidden;if(!q.hidden&&!q.dataset.done){
+    const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
+    s.onload=()=>{q.innerHTML="";new QRCode(q,{text:playerURL,width:220,height:220});q.dataset.done=1;};
+    s.onerror=()=>{q.textContent="تعذّر تحميل رمز QR، استخدم الرابط المكتوب.";};document.head.appendChild(s);}};
+  const pressLine=()=>{const el=$("livePress");const p=QS&&QS.presses||[];
+    el.innerHTML=p.length?"ترتيب الضغط على الجرس: "+p.map((t,k)=>`<span class="chip" style="border-color:${TEAM_COLORS[t]}">${k+1}. ${esc(teams()[t]?teams()[t].name:"")}</span>`).join(" "):"";};
+  liveOnMsg=d=>{
+    if(d.t!=="buzz"||d.g!==S.gid||S.phase!=="play"||!QS||QS.i!==d.q)return;
+    const t=d.team|0;if(t<0||t>=S.teamCount)return;
+    QS.presses=QS.presses||[];if(!QS.presses.includes(t))QS.presses.push(t);
+    const s=QS;const open=!s.done&&s.buzzed===null&&!s.out.has(t)&&(s.st.kind==="speed"||s.steal)&&!(s.it.type==="memory"&&s.memPhase!=="ask");
+    if(open)buzz(t);else{pressLine();liveSync();}
+  };
+  let lastSig="",timer=null;
+  const snap=()=>{const base={t:"state",g:S.gid,phase:S.phase,n:S.teamCount,names:teams().map(t=>t.name),scores:S.scores.slice(0,S.teamCount),cur:S.cur,tw:S.tieWin??null};
+    if(S.phase!=="play"||!QS)return base;const s=QS;
+    return Object.assign(base,{buzzed:s.buzzed,out:[...s.out],wrong:[...s.wrong],gone:[...s.gone],steal:!!s.steal,done:!!s.done,winner:s.winner,lp:s.lastPts||0,
+      running:!!s.running,left:s.left,rev:s.rev||0,perm:s.perm||null,mem:s.memPhase,memLeft:s.memLeft,pr:s.presses||[]});};
+  const sig=o=>JSON.stringify(Object.assign({},o,{left:0,rev:0,memLeft:0}));
+  window.liveSync=function(){pressLine();const o=snap(),g=sig(o);if(g===lastSig)return;lastSig=g;
+    clearTimeout(timer);timer=setTimeout(()=>livePublish(snap()).catch(()=>{$("liveTxt").textContent="تعذّر إرسال آخر تحديث";}),500);};
+  const _rs=renderStage;renderStage=function(){_rs();liveSync();};
+  const _rr=renderResults;renderResults=function(){_rr();liveSync();};
+  const _ro=route;route=function(){_ro();liveSync();};
+  liveConnect();liveStatus();
+}
+
+/* ---------- PLAYER (contestant phone) ---------- */
+if(MODE==="player"){
+  document.querySelector(".wrap").hidden=true;
+  const root=document.createElement("div");root.className="wrap player";document.body.appendChild(root);
+  let P=null,recvAt=0,myTeam=null,pressedQ=null,tick=null;
+  const myKey=g=>"khatma-team-"+g;
+  const ldTeam=g=>{try{const v=localStorage.getItem(myKey(g));return v===null?null:+v}catch(e){return null}};
+  liveStatus=()=>{const d=document.getElementById("pDot");if(d)d.classList.toggle("on",liveConnected);};
+  liveOnMsg=d=>{if(d.t!=="state")return;
+    if(!P||P.g!==d.g){myTeam=ldTeam(d.g);pressedQ=null;}
+    if(P&&(P.cur!==d.cur||P.g!==d.g))pressedQ=null;
+    P=d;recvAt=Date.now();S.teamCount=d.n;STEPS=buildSteps(d.n);draw();};
+  const pick=t=>{myTeam=t;try{localStorage.setItem(myKey(P.g),t)}catch(e){}draw();};
+  const elapsed=()=>P&&P.running?Math.floor((Date.now()-recvAt)/1000):0;
+  function draw(){
+    clearInterval(tick);
+    const head=`<header class="top"><div class="brand"><h1>مسابقة ليلة الختمة</h1><p>شاشة المتسابقين <span id="pDot" class="live-dot${liveConnected?" on":""}"></span></p></div>
+      ${P&&myTeam!==null&&P.names[myTeam]!==undefined?`<button class="btn ghost" id="pChange" type="button">تغيير الفريق</button>`:""}</header>`;
+    if(!P){root.innerHTML=head+`<div class="card"><p class="q-text" style="font-size:22px">بانتظار المنظم… ستظهر المسابقة هنا حين يفتحها.</p></div>`;return;}
+    const names=P.names,cols=TEAM_COLORS;
+    const scores=`<section class="scores">${names.map((nm,i)=>`<div class="team${i===myTeam?" buzzed":""}" style="--tc:${cols[i]}"><div class="nm">${esc(nm)}${i===myTeam?" (فريقك)":""}</div><div class="sc">${P.scores[i]}</div></div>`).join("")}</section>`;
+    if(myTeam===null||myTeam>=P.n){root.innerHTML=head+`<div class="card"><h2>اختر فريقك</h2><div class="p-teams">${names.map((nm,i)=>`<button class="btn p-team" type="button" data-t="${i}" style="--tc:${cols[i]}">${esc(nm)}</button>`).join("")}</div></div>`;
+      root.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>pick(+b.dataset.t));return;}
+    if(P.phase==="setup"){root.innerHTML=head+scores+`<div class="card"><p class="q-text" style="font-size:22px">أنت في <b>${esc(names[myTeam])}</b>. بانتظار بدء المسابقة…</p></div>`;bind();return;}
+    if(P.phase==="results"){const order=names.map((nm,i)=>i).sort((a,b)=>(P.scores[b]-P.scores[a])||((b===P.tw)-(a===P.tw)));
+      root.innerHTML=head+`<div class="card"><h2>النتائج النهائية</h2><div class="podium">${order.map((i,k)=>`<div class="pod${k===0?" first":""}" style="--tc:${cols[i]}"><span>${k+1}. ${esc(names[i])}</span><span class="pts">${P.scores[i]}</span></div>`).join("")}</div></div>`;bind();return;}
+    const st=STEPS[P.cur];if(!st){root.innerHTML=head+scores;bind();return;}
+    const it=st.q,owner=st.kind==="priv"?st.team:null;
+    const left=Math.max(0,P.left-elapsed());
+    const isP=it.type==="pic"||it.type==="flag";
+    const memShow=it.type==="memory"&&P.mem!=="ask";
+    let body="";
+    const optRow=(o,k)=>`<div class="opt${it.quran?" quran":""}${it.big?" big":""}${P.wrong.includes(k)?" wrong":""}${P.gone.includes(k)?" gone":""}${P.done&&k===it.a?" right":""}"><span class="l">${L[k]}</span><span class="tx">${esc(o)}</span></div>`;
+    if(memShow){const sh=it.show;body=P.mem==="ready"?`<p class="hint">ركّزوا! سيظهر المحتوى ${sh.secs} ثوانٍ فقط.</p>`
+      :`<div class="mem">${sh.kind==="grid"?`<div class="mem-grid" style="grid-template-columns:repeat(${sh.items.length>9?4:3},minmax(50px,90px))">${sh.items.map(x=>`<div>${x}</div>`).join("")}</div>`:sh.kind==="seq"?`<div class="mem-seq">${sh.items.join(" ")}</div>`:`<div class="mem-list">${sh.items.map(x=>`<span>${esc(x)}</span>`).join("")}</div>`}</div>`;}
+    else if(it.o)body=`<div class="opts col">${it.o.map(optRow).join("")}</div>`;
+    if(it.type==="order")body=`<div class="tiles">${(P.done?[0,1,2,3]:it.shuf).map(k=>`<div class="tile${P.done?" right":""}">${P.done?`<span class="n">${k+1}</span>`:""}${esc(it.items[k].t)}</div>`).join("")}</div>`;
+    if(isP){const revealing=P.running&&P.buzzed===null;const rev=P.done?TILES:Math.min(TILES,P.rev+(revealing?elapsed():0));
+      const off=new Set((P.perm||[]).slice(0,rev));const g=it.grid||[6,5];
+      const media=it.img?`<img src="${it.img}" alt="">`:(it.type==="flag"?FLAGS[it.pic]:SIL[it.pic]);
+      body=`<div class="pic${it.type==="flag"?" flag":""}" style="justify-content:center;display:flex"><div class="reveal-wrap${it.img?" img":""}">${media}<div class="cover" style="grid-template-columns:repeat(${g[0]},1fr);grid-template-rows:repeat(${g[1]},1fr)">${Array.from({length:TILES},(_,k)=>`<i class="${P.done||off.has(k)?"off":""}">؟</i>`).join("")}</div></div></div>`+(it.o?`<div class="opts col">${it.o.map(optRow).join("")}</div>`:"");}
+    const buzzOpen=!P.done&&P.buzzed===null&&!P.out.includes(myTeam)&&(st.kind==="speed"||P.steal)&&!memShow;
+    const pressed=pressedQ===P.cur;
+    const bz=st.kind==="speed"||P.steal?`<button class="p-buzz" id="pBuzz" type="button" ${buzzOpen&&!pressed?"":"disabled"} style="--tc:${cols[myTeam]}">${pressed&&P.buzzed===null?"ضغطتم… بانتظار المنظم":P.buzzed===myTeam?"أنتم الأسرع! أجيبوا":P.out.includes(myTeam)?"خرجتم من هذا السؤال":"اضغط الجرس"}</button>`:"";
+    let status="";
+    if(P.done)status=P.winner!==null&&P.winner>=0?`أحسن <b>${esc(names[P.winner])}</b> +${P.lp}`:"انتهى السؤال دون نقاط.";
+    else if(P.buzzed!==null)status=st.kind==="priv"&&!P.steal?`يجيب <b>${esc(names[P.buzzed])}</b>`:`ضغط أولًا: <b>${esc(names[P.buzzed])}</b>`;
+    else if(P.steal)status="السرقة مفتوحة بنصف النقاط! اضغط الجرس إن عرفت الإجابة.";
+    const ans=P.done?`<div class="reveal"><div class="ans">${it.type==="order"?"الترتيب الصحيح: "+it.items.map(x=>x.t).join(" ← "):it.o?"الإجابة: "+L[it.a]+". "+esc(it.o[it.a]):"الإجابة: "+esc(it.ans)}</div></div>`:"";
+    const prs=P.pr&&P.pr.length?`<p class="hint">ترتيب الضغط: ${P.pr.map((t,k)=>`${k+1}. ${esc(names[t])}`).join("، ")}</p>`:"";
+    root.innerHTML=head+scores+`<section class="stage"><div class="chips"><span class="chip gold">${CATS[st.ci].name}</span><span class="chip">${!CATS[st.ci].priv?"سؤال الأسرع":`الخطوة ${st.step}: ${st.kind==="speed"?"سؤال الأسرع":"سؤال لكل فريق"}`}</span><span class="chip">${P.cur+1} من ${STEPS.length}</span>${!P.done&&!memShow?`<span class="chip p-time">⏱ ${left}</span>`:""}</div>
+      ${owner!==null?`<div class="turn-banner" style="--tc:${cols[owner]}">دور ${esc(names[owner])}${owner===myTeam?"<small>سؤالكم! أجيبوا بصوت مسموع</small>":P.steal?"<small>السرقة مفتوحة لبقية الفرق</small>":""}</div>`:""}
+      <p class="q-text">${memShow?"احفظوا جيدًا ما سيظهر":it.q}</p>${body}${bz}<div class="status">${status}</div>${prs}${ans}</section>`;
+    bind();
+    const b=document.getElementById("pBuzz");if(b)b.onclick=()=>{if(pressedQ===P.cur)return;pressedQ=P.cur;sfx.buzz();draw();
+      livePublish({t:"buzz",g:P.g,q:P.cur,team:myTeam}).catch(()=>{pressedQ=null;draw();alert("تعذّر الإرسال، اضغط مرة أخرى");});};
+    if(P.running&&!P.done)tick=setInterval(()=>{const l=Math.max(0,P.left-elapsed());const tc=root.querySelector(".p-time");if(tc)tc.textContent="⏱ "+l;
+      if(isP&&P.buzzed===null){const r=Math.min(TILES,P.rev+elapsed()),off=new Set((P.perm||[]).slice(0,r));root.querySelectorAll(".cover i").forEach((el,k)=>el.classList.toggle("off",off.has(k)));}
+      if(l<=0)clearInterval(tick);},1000);
+  }
+  function bind(){const c=document.getElementById("pChange");if(c)c.onclick=()=>{myTeam=null;try{localStorage.removeItem(myKey(P.g))}catch(e){}draw();};}
+  draw();liveConnect();
+}
+if(MODE!=="player")route();
 })();
 </script>
